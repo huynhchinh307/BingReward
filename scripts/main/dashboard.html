@@ -1168,11 +1168,12 @@
             const threads = Math.max(1, Math.min(20, parseInt(document.getElementById('threadCount').value) || 2));
             const queue = [...selectedEmails];
             const total = queue.length;
-            let started = 0, finished = 0;
+            let activeCount = 0; // số thread ĐANG chạy
+            let finished = 0;
 
             // Mark ALL selected as queued upfront
             queue.forEach(e => queuedEmails.add(e));
-            renderAccounts(lastAccounts); // refresh badges
+            renderAccounts(lastAccounts);
 
             batchRunning = true;
             batchCancelled = false;
@@ -1180,24 +1181,8 @@
             document.getElementById('runBotsBtn').disabled = true;
             showToast(`🚀 Queue: ${total} bots, ${threads} thread(s) running`, 'success');
 
-            async function runOne(email) {
-                if (batchCancelled) {
-                    queuedEmails.delete(email);
-                    return;
-                }
-                started++;
-                queuedEmails.delete(email); // now actually starting
-                await openSession(email, 'bot', true); // silent=true: no toast, no log open
-                await new Promise(r => setTimeout(r, 2000));
-                await waitForBotFinish(email);
-                finished++;
-                showToast(`✓ ${email.split('@')[0]} done (${finished}/${total})`, 'success');
-                // Tự lấy acc tiếp theo trong queue
-                if (!batchCancelled && queue.length > 0) {
-                    const next = queue.shift();
-                    queuedEmails.delete(next); // sẽ start ngay
-                    runOne(next);
-                } else if (finished >= started) {
+            function checkAllDone() {
+                if (activeCount === 0 && queue.length === 0) {
                     batchRunning = false;
                     batchCancelled = false;
                     queuedEmails.clear();
@@ -1208,10 +1193,36 @@
                 }
             }
 
-            // Launch initial pool (remove from queue set when starting)
+            async function runOne(email) {
+                if (batchCancelled) {
+                    queuedEmails.delete(email);
+                    checkAllDone();
+                    return;
+                }
+                activeCount++;
+                queuedEmails.delete(email);
+                await openSession(email, 'bot', true);
+                await new Promise(r => setTimeout(r, 2000));
+                await waitForBotFinish(email);
+                activeCount--;
+                finished++;
+                showToast(`✓ ${email.split('@')[0]} done (${finished}/${total})`, 'success');
+
+                // Lấy acc tiếp theo nếu còn trong queue
+                if (!batchCancelled && queue.length > 0) {
+                    const next = queue.shift();
+                    queuedEmails.delete(next);
+                    runOne(next); // KHÔNG await — slot này tự duy trì
+                }
+
+                // Sau khi gọi runOne tiếp hoặc queue rỗng, check done
+                checkAllDone();
+            }
+
+            // Khởi động pool ban đầu
             const initialBatch = queue.splice(0, threads);
             initialBatch.forEach(e => queuedEmails.delete(e));
-            await Promise.all(initialBatch.map(email => runOne(email)));
+            initialBatch.forEach(email => runOne(email)); // KHÔNG await Promise.all
         }
 
         let lastAccounts = [];
