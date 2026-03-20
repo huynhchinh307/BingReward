@@ -19,6 +19,7 @@ accounts.main.json
 
 # Config files with personal settings (root level)
 config.json
+!src/config.json
 
 # Source-level overrides (keep .example files)
 src/accounts.json
