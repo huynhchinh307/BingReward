@@ -356,6 +356,7 @@
         .status-badge {
             display: inline-flex;
             align-items: center;
+            gap: 5px;
             padding: 0.35rem 0.85rem;
             border-radius: 999px;
             font-size: 0.8rem;
@@ -369,6 +370,11 @@
             color: var(--success);
         }
 
+        .status-badge.queued {
+            background: rgba(245, 158, 11, 0.12);
+            color: #f59e0b;
+        }
+
         .status-badge.active::before {
             content: '';
             display: inline-block;
@@ -376,9 +382,24 @@
             height: 6px;
             border-radius: 50%;
             background: var(--success);
-            margin-right: 6px;
             animation: pulse 1.5s infinite;
         }
+
+        .status-badge.queued::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border: 2px solid #f59e0b;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
 
         /* Toolbar */
         .toolbar {
@@ -1090,6 +1111,7 @@
 
         let batchRunning = false;
         let batchCancelled = false;
+        const queuedEmails = new Set(); // track accounts waiting in queue
 
         function stopBatchRun() {
             batchCancelled = true;
@@ -1148,39 +1170,54 @@
             const total = queue.length;
             let started = 0, finished = 0;
 
+            // Mark ALL selected as queued upfront
+            queue.forEach(e => queuedEmails.add(e));
+            renderAccounts(lastAccounts); // refresh badges
+
             batchRunning = true;
             batchCancelled = false;
             document.getElementById('stopBotsBtn').style.display = '';
             document.getElementById('runBotsBtn').disabled = true;
-            showToast(`Starting ${total} bots with ${threads} thread(s)...`, 'success');
+            showToast(`🚀 Queue: ${total} bots, ${threads} thread(s) running`, 'success');
 
             async function runOne(email) {
-                if (batchCancelled) return;
+                if (batchCancelled) {
+                    queuedEmails.delete(email);
+                    return;
+                }
                 started++;
-                await openSession(email, 'bot');
-                await new Promise(r => setTimeout(r, 2000)); // stagger giữa các lần khởi động
+                queuedEmails.delete(email); // now actually starting
+                await openSession(email, 'bot', true); // silent=true: no toast, no log open
+                await new Promise(r => setTimeout(r, 2000));
                 await waitForBotFinish(email);
                 finished++;
                 showToast(`✓ ${email.split('@')[0]} done (${finished}/${total})`, 'success');
                 // Tự lấy acc tiếp theo trong queue
                 if (!batchCancelled && queue.length > 0) {
                     const next = queue.shift();
+                    queuedEmails.delete(next); // sẽ start ngay
                     runOne(next);
                 } else if (finished >= started) {
                     batchRunning = false;
                     batchCancelled = false;
+                    queuedEmails.clear();
                     document.getElementById('stopBotsBtn').style.display = 'none';
                     document.getElementById('runBotsBtn').disabled = false;
                     showToast(`✅ All done! ${finished}/${total} bots completed.`, 'success');
+                    renderAccounts(lastAccounts);
                 }
             }
 
-            // Launch initial pool
+            // Launch initial pool (remove from queue set when starting)
             const initialBatch = queue.splice(0, threads);
+            initialBatch.forEach(e => queuedEmails.delete(e));
             await Promise.all(initialBatch.map(email => runOne(email)));
         }
 
+        let lastAccounts = [];
+
         function renderAccounts(accounts) {
+            lastAccounts = accounts;
             document.getElementById('loader').style.display = 'none';
             const listContainer = document.getElementById('accountsListContainer');
             const emptyState = document.getElementById('emptyState');
@@ -1197,9 +1234,12 @@
 
             const newHTML = accounts.map(acc => {
                 const isRunning = acc.isActiveBot || acc.isActiveDesktop || acc.isActiveMobile;
+                const isQueued = queuedEmails.has(acc.email);
                 const statusHtml = isRunning
                     ? `<span class="status-badge active">Running</span>`
-                    : `<span class="status-badge">Idle</span>`;
+                    : isQueued
+                        ? `<span class="status-badge queued">Queued</span>`
+                        : `<span class="status-badge">Idle</span>`;
 
                 const getBtnState = (type) => {
                     let isActive = false;
@@ -1300,14 +1340,15 @@
             }
         }
 
-        async function openSession(email, type) {
+        async function openSession(email, type, silent = false) {
             try {
-                let name = type;
-                if (type === 'mobile') name = 'Mobile profile';
-                if (type === 'desktop') name = 'Desktop profile';
-                if (type === 'bot') name = 'Automated Bot tasks';
-
-                showToast(`Starting ${name}...`, 'success');
+                if (!silent) {
+                    let name = type;
+                    if (type === 'mobile') name = 'Mobile profile';
+                    if (type === 'desktop') name = 'Desktop profile';
+                    if (type === 'bot') name = 'Automated Bot tasks';
+                    showToast(`Starting ${name}...`, 'success');
+                }
                 fetchAccounts();
                 const res = await fetch(`${API_URL}/api/open`, {
                     method: 'POST',
@@ -1318,7 +1359,7 @@
 
                 if (data.success) {
                     fetchAccounts();
-                    viewLogs(email, type);
+                    if (!silent) viewLogs(email, type); // chỉ tự mở log khi user bấm tay
                 } else {
                     showToast(data.error, 'error');
                 }
