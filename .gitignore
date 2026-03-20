@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output (compiled JS)
+dist/
+
+# Sessions & fingerprints (sensitive browser data)
+sessions/
+browser/
+
+# ========================
+# SENSITIVE - DO NOT COMMIT
+# ========================
+
+# Account credentials (root level)
+accounts.json
+accounts.dev.json
+accounts.main.json
+
+# Config files with personal settings (root level)
+config.json
+
+# Source-level overrides (keep .example files)
+src/accounts.json
+
+# Dashboard runtime data
+dist/account_stats.json
+
+# ========================
+# Development / temporary
+# ========================
+.dev/
+.vscode/
+diagnostics/
+note
+.DS_Store
+.playwright-chromium-installed
+
+# Logs
+*.log
