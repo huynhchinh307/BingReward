@@ -201,20 +201,76 @@
 
         .main-layout {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 480px;
+            grid-template-columns: minmax(0, 1fr);
             gap: 1.5rem;
             align-items: start;
         }
 
-        @media (max-width: 1300px) {
-            .main-layout {
-                grid-template-columns: 1fr;
-            }
-
-            .terminal-panel {
-                height: 500px !important;
-                position: static !important;
-            }
+        /* Log Drawer */
+        .log-drawer {
+            position: fixed;
+            top: 0;
+            right: -580px;
+            width: 560px;
+            height: 100vh;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            box-shadow: -20px 0 60px rgba(0,0,0,0.6);
+            transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            padding: 1.5rem;
+            gap: 0;
+        }
+        .log-drawer.open {
+            right: 0;
+        }
+        .log-drawer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 999;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(2px);
+        }
+        .log-drawer-overlay.open {
+            display: block;
+        }
+        /* Floating toggle button */
+        .log-fab {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            z-index: 998;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.7rem 1.1rem;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            border: none;
+            border-radius: 50px;
+            color: #fff;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, 0.45);
+            transition: transform 0.2s, box-shadow 0.2s;
+            letter-spacing: 0.01em;
+        }
+        .log-fab:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(99, 102, 241, 0.6);
+        }
+        .log-fab-badge {
+            background: #10b981;
+            border-radius: 50px;
+            padding: 0.1rem 0.45rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+            min-width: 20px;
+            text-align: center;
+            display: none;
         }
 
         .glass-panel {
@@ -539,9 +595,9 @@
             margin-top: 0;
             display: flex;
             flex-direction: column;
-            height: calc(100vh - 220px);
-            position: sticky;
-            top: 2rem;
+            height: 100%;
+            flex: 1;
+            min-height: 0;
         }
 
         .terminal-header {
@@ -757,15 +813,30 @@
                 </div>
             </div>
 
-            <div class="glass-panel terminal-panel">
-                <div class="terminal-header">
-                    <h3 id="terminalTitle">Live Logs - No Selection</h3>
-                    <span style="color: var(--text-muted); font-size: 0.85rem;">Click 'View Logs' on a running
-                        session</span>
-                </div>
+        </div>
+
+        <!-- Log Drawer Overlay -->
+        <div class="log-drawer-overlay" id="logDrawerOverlay" onclick="closeLogDrawer()"></div>
+
+        <!-- Log Drawer -->
+        <div class="log-drawer" id="logDrawer">
+            <div class="terminal-header">
+                <h3 id="terminalTitle" style="font-size:1rem;">Live Logs - No Selection</h3>
+                <button onclick="closeLogDrawer()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);padding:0.25rem;" title="Close">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="terminal-panel" style="padding:0;border:none;box-shadow:none;background:transparent;">
                 <div id="terminal" class="terminal-content">Waiting for a task to start...</div>
             </div>
         </div>
+
+        <!-- Floating Log Button -->
+        <button class="log-fab" id="logFab" onclick="toggleLogDrawer()" title="Open Live Logs">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10,9 9,9 8,9"/></svg>
+            Live Logs
+            <span class="log-fab-badge" id="logFabBadge">0</span>
+        </button>
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
@@ -1029,18 +1100,36 @@
         }
 
         async function waitForBotFinish(email) {
+            // Phase 1: Wait for bot to START (isActiveBot = true), max 15s
+            await new Promise(resolve => {
+                let attempts = 0;
+                const check = setInterval(async () => {
+                    attempts++;
+                    try {
+                        const res = await fetch(`${API_URL}/api/accounts`);
+                        const data = await res.json();
+                        const acc = data.accounts?.find(a => a.email === email);
+                        if (acc?.isActiveBot || attempts >= 8) { // max ~15s
+                            clearInterval(check);
+                            resolve();
+                        }
+                    } catch { clearInterval(check); resolve(); }
+                }, 2000);
+            });
+
+            // Phase 2: Wait for bot to FINISH (isActiveBot = false)
             return new Promise(resolve => {
                 const check = setInterval(async () => {
                     try {
                         const res = await fetch(`${API_URL}/api/accounts`);
                         const data = await res.json();
                         const acc = data.accounts?.find(a => a.email === email);
-                        if (!acc || !acc.isActiveBot) {
+                        if (!acc?.isActiveBot) {
                             clearInterval(check);
                             resolve();
                         }
                     } catch { clearInterval(check); resolve(); }
-                }, 2000);
+                }, 3000);
             });
         }
 
@@ -1069,20 +1158,20 @@
                 if (batchCancelled) return;
                 started++;
                 await openSession(email, 'bot');
-                await new Promise(r => setTimeout(r, 800));
+                await new Promise(r => setTimeout(r, 2000)); // stagger giữa các lần khởi động
                 await waitForBotFinish(email);
                 finished++;
                 showToast(`✓ ${email.split('@')[0]} done (${finished}/${total})`, 'success');
-                // Start next in queue
+                // Tự lấy acc tiếp theo trong queue
                 if (!batchCancelled && queue.length > 0) {
                     const next = queue.shift();
                     runOne(next);
-                } else if (finished === total || (batchCancelled && finished >= started - threads)) {
+                } else if (finished >= started) {
                     batchRunning = false;
                     batchCancelled = false;
                     document.getElementById('stopBotsBtn').style.display = 'none';
                     document.getElementById('runBotsBtn').disabled = false;
-                    showToast(`All done! ${finished}/${total} bots completed.`, 'success');
+                    showToast(`✅ All done! ${finished}/${total} bots completed.`, 'success');
                 }
             }
 
@@ -1279,8 +1368,32 @@
                     if (isScrolledToBottom) {
                         terminal.scrollTop = terminal.scrollHeight;
                     }
+                    // Update badge
+                    const badge = document.getElementById('logFabBadge');
+                    if (data.logs.length > 0) {
+                        badge.textContent = data.logs.length;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
                 }
             } catch { }
+        }
+
+        function toggleLogDrawer() {
+            const drawer = document.getElementById('logDrawer');
+            if (drawer.classList.contains('open')) closeLogDrawer();
+            else openLogDrawer();
+        }
+
+        function openLogDrawer() {
+            document.getElementById('logDrawer').classList.add('open');
+            document.getElementById('logDrawerOverlay').classList.add('open');
+        }
+
+        function closeLogDrawer() {
+            document.getElementById('logDrawer').classList.remove('open');
+            document.getElementById('logDrawerOverlay').classList.remove('open');
         }
 
         function viewLogs(email, type) {
@@ -1289,7 +1402,7 @@
             document.getElementById('terminal').innerHTML = 'Connecting...';
             if (!logInterval) logInterval = setInterval(fetchLogs, 1000);
             fetchLogs();
-            document.querySelector('.terminal-panel').scrollIntoView({ behavior: 'smooth', block: 'end' });
+            openLogDrawer();
         }
 
         function showToast(message, type = 'success') {
