@@ -89,10 +89,12 @@ async function main() {
         if (!fingerprint) {
             log('INFO', `Fingerprint enabled but not found. Generating new ${sessionType} fingerprint...`)
             const fingerprintGenerator = new FingerprintGenerator()
+            const browserType = config.browserType ?? 'chromium'
+            const fingerprintBrowser = browserType === 'edge' ? 'edge' : 'chrome'
             const bOptions = {
                 devices: isMobile ? ['mobile'] : ['desktop'],
                 operatingSystems: isMobile ? ['android', 'ios'] : ['windows', 'macos', 'linux'],
-                browsers: ['chrome', 'edge']
+                browsers: [fingerprintBrowser]
             }
             fingerprint = fingerprintGenerator.getFingerprint(bOptions)
             
