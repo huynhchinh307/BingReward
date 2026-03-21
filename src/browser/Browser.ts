@@ -58,13 +58,17 @@ class Browser {
                   }
                 : undefined
 
-            this.bot.logger.info(this.bot.isMobile, 'BROWSER', `Launching with browser engine: ${browserType.toUpperCase()}`)
+            // patchright only supports its own patched Chromium binary
+            // Edge fingerprint/UA is applied separately via generateFingerprint()
+            this.bot.logger.info(
+                this.bot.isMobile,
+                'BROWSER',
+                `Launching Chromium (website fingerprint: ${browserType.toUpperCase()})`
+            )
 
             browser = await rebrowser.chromium.launch({
                 headless: this.bot.config.headless,
                 ...(proxyConfig && { proxy: proxyConfig }),
-                // Dùng 'msedge' channel để Playwright tự tìm Edge đã cài trên hệ thống
-                ...(browserType === 'edge' && { channel: 'msedge' }),
                 args: [...Browser.BROWSER_ARGS]
             })
         } catch (error) {
@@ -130,10 +134,13 @@ class Browser {
     }
 
     async generateFingerprint(isMobile: boolean) {
+        const browserType = this.bot.config.browserType ?? 'chromium'
+        const fingerprintBrowser = browserType === 'edge' ? 'edge' : 'chrome'
+
         const fingerPrintData = new FingerprintGenerator().getFingerprint({
             devices: isMobile ? ['mobile'] : ['desktop'],
             operatingSystems: isMobile ? ['android', 'ios'] : ['windows', 'linux'],
-            browsers: [{ name: 'edge' }]
+            browsers: [{ name: fingerprintBrowser }]
         })
 
         const userAgentManager = new UserAgentManager(this.bot)
