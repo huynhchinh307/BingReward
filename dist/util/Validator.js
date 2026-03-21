@@ -49,6 +49,7 @@ exports.ConfigSchema = zod_1.z.object({
     baseURL: zod_1.z.string(),
     sessionPath: zod_1.z.string(),
     headless: zod_1.z.boolean(),
+    browserType: zod_1.z.enum(['chromium', 'edge']).optional().default('chromium'),
     runOnZeroPoints: zod_1.z.boolean().optional().default(false),
     clusters: zod_1.z.number().int().nonnegative(),
     errorDiagnostics: zod_1.z.boolean(),

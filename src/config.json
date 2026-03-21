@@ -2,6 +2,7 @@
     "baseURL": "https://rewards.bing.com",
     "sessionPath": "sessions",
     "headless": false,
+    "browserType": "chromium",
     "clusters": 2,
     "errorDiagnostics": false,
     "workers": {

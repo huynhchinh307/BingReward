@@ -5,6 +5,10 @@ export declare const ConfigSchema: z.ZodObject<{
     baseURL: z.ZodString;
     sessionPath: z.ZodString;
     headless: z.ZodBoolean;
+    browserType: z.ZodDefault<z.ZodOptional<z.ZodEnum<{
+        chromium: "chromium";
+        edge: "edge";
+    }>>>;
     runOnZeroPoints: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
     clusters: z.ZodNumber;
     errorDiagnostics: z.ZodBoolean;

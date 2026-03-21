@@ -2,6 +2,7 @@ export interface Config {
     baseURL: string;
     sessionPath: string;
     headless: boolean;
+    browserType?: 'chromium' | 'edge';
     runOnZeroPoints: boolean;
     clusters: number;
     errorDiagnostics: boolean;

@@ -49,6 +49,7 @@ export const ConfigSchema = z.object({
     baseURL: z.string(),
     sessionPath: z.string(),
     headless: z.boolean(),
+    browserType: z.enum(['chromium', 'edge']).optional().default('chromium'),
     runOnZeroPoints: z.boolean().optional().default(false),
     clusters: z.number().int().nonnegative(),
     errorDiagnostics: z.boolean(),
