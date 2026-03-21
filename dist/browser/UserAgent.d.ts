@@ -4,7 +4,7 @@ export declare class UserAgentManager {
     private bot;
     private static readonly NOT_A_BRAND_VERSION;
     constructor(bot: MicrosoftRewardsBot);
-    getUserAgent(isMobile: boolean): Promise<{
+    getUserAgent(isMobile: boolean, browserType: 'chromium' | 'edge'): Promise<{
         userAgent: string;
         userAgentMetadata: {
             isMobile: boolean;

@@ -9,27 +9,38 @@ export class UserAgentManager {
 
     constructor(private bot: MicrosoftRewardsBot) {}
 
-    async getUserAgent(isMobile: boolean) {
+    async getUserAgent(isMobile: boolean, browserType: 'chromium' | 'edge') {
         const system = this.getSystemComponents(isMobile)
         const app = await this.getAppComponents(isMobile)
 
-        const uaTemplate = isMobile
-            ? `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${app.chrome_reduced_version} Mobile Safari/537.36 EdgA/${app.edge_version}`
-            : `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${app.chrome_reduced_version} Safari/537.36 Edg/${app.edge_version}`
+        let uaTemplate = ''
+        if (browserType === 'edge') {
+            uaTemplate = isMobile
+                ? `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${app.chrome_reduced_version} Mobile Safari/537.36 EdgA/${app.edge_version}`
+                : `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${app.chrome_reduced_version} Safari/537.36 Edg/${app.edge_version}`
+        } else {
+            uaTemplate = isMobile
+                ? `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${app.chrome_version} Mobile Safari/537.36`
+                : `Mozilla/5.0 (${system}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${app.chrome_version} Safari/537.36`
+        }
 
         const platformVersion = `${isMobile ? Math.floor(Math.random() * 5) + 9 : Math.floor(Math.random() * 15) + 1}.0.0`
+
+        const brandName = browserType === 'edge' ? 'Microsoft Edge' : 'Google Chrome'
+        const brandVersionFull = browserType === 'edge' ? app.edge_version : app.chrome_version
+        const brandVersionMajor = browserType === 'edge' ? app.edge_major_version : app.chrome_major_version
 
         const uaMetadata = {
             isMobile,
             platform: isMobile ? 'Android' : 'Windows',
             fullVersionList: [
                 { brand: 'Not/A)Brand', version: `${UserAgentManager.NOT_A_BRAND_VERSION}.0.0.0` },
-                { brand: 'Microsoft Edge', version: app['edge_version'] },
+                { brand: brandName, version: brandVersionFull },
                 { brand: 'Chromium', version: app['chrome_version'] }
             ],
             brands: [
                 { brand: 'Not/A)Brand', version: UserAgentManager.NOT_A_BRAND_VERSION },
-                { brand: 'Microsoft Edge', version: app['edge_major_version'] },
+                { brand: brandName, version: brandVersionMajor },
                 { brand: 'Chromium', version: app['chrome_major_version'] }
             ],
             platformVersion,
@@ -125,7 +136,8 @@ export class UserAgentManager {
         isMobile: boolean
     ): Promise<BrowserFingerprintWithHeaders> {
         try {
-            const userAgentData = await this.getUserAgent(isMobile)
+            const browserType = this.bot.config.browserType ?? 'chromium'
+            const userAgentData = await this.getUserAgent(isMobile, browserType)
             const componentData = await this.getAppComponents(isMobile)
 
             //@ts-expect-error Errors due it not exactly matching
@@ -137,10 +149,18 @@ export class UserAgentManager {
             )
 
             fingerprint.headers['user-agent'] = userAgentData.userAgent
-            fingerprint.headers['sec-ch-ua'] =
-                `"Microsoft Edge";v="${componentData.edge_major_version}", "Not=A?Brand";v="${componentData.not_a_brand_major_version}", "Chromium";v="${componentData.chrome_major_version}"`
-            fingerprint.headers['sec-ch-ua-full-version-list'] =
-                `"Microsoft Edge";v="${componentData.edge_version}", "Not=A?Brand";v="${componentData.not_a_brand_version}", "Chromium";v="${componentData.chrome_version}"`
+            
+            if (browserType === 'edge') {
+                fingerprint.headers['sec-ch-ua'] =
+                    `"Microsoft Edge";v="${componentData.edge_major_version}", "Not=A?Brand";v="${componentData.not_a_brand_major_version}", "Chromium";v="${componentData.chrome_major_version}"`
+                fingerprint.headers['sec-ch-ua-full-version-list'] =
+                    `"Microsoft Edge";v="${componentData.edge_version}", "Not=A?Brand";v="${componentData.not_a_brand_version}", "Chromium";v="${componentData.chrome_version}"`
+            } else {
+                fingerprint.headers['sec-ch-ua'] =
+                    `"Google Chrome";v="${componentData.chrome_major_version}", "Not=A?Brand";v="${componentData.not_a_brand_major_version}", "Chromium";v="${componentData.chrome_major_version}"`
+                fingerprint.headers['sec-ch-ua-full-version-list'] =
+                    `"Google Chrome";v="${componentData.chrome_version}", "Not=A?Brand";v="${componentData.not_a_brand_version}", "Chromium";v="${componentData.chrome_version}"`
+            }
 
             /*
             Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Mobile Safari/537.36 EdgA/129.0.0.0
