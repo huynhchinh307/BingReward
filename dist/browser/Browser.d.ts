@@ -9,9 +9,7 @@ interface BrowserCreationResult {
 declare class Browser {
     private readonly bot;
     private static readonly BROWSER_ARGS;
-    private static readonly EDGE_PATHS;
     constructor(bot: MicrosoftRewardsBot);
-    private getEdgeExecutable;
     createBrowser(account: Account): Promise<BrowserCreationResult>;
     private formatProxyServer;
     generateFingerprint(isMobile: boolean): Promise<BrowserFingerprintWithHeaders>;

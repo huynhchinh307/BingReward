@@ -1,7 +1,6 @@
 import rebrowser, { BrowserContext } from 'patchright'
 import { newInjectedContext } from 'fingerprint-injector'
 import { BrowserFingerprintWithHeaders, FingerprintGenerator } from 'fingerprint-generator'
-import * as fs from 'fs'
 
 import type { MicrosoftRewardsBot } from '../index'
 import { loadSessionData, saveFingerprintData } from '../util/Load'
@@ -39,43 +38,13 @@ class Browser {
         '--disable-save-password-bubble'
     ] as const
 
-    // Known Edge installation paths by platform
-    private static readonly EDGE_PATHS: Partial<Record<NodeJS.Platform, string[]>> = {
-        win32: [
-            'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-            'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-            `${process.env.LOCALAPPDATA}\\Microsoft\\Edge\\Application\\msedge.exe`
-        ],
-        linux: [
-            '/usr/bin/microsoft-edge',
-            '/usr/bin/microsoft-edge-stable',
-            '/opt/microsoft/msedge/msedge'
-        ],
-        darwin: [
-            '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
-        ]
-    }
-
     constructor(bot: MicrosoftRewardsBot) {
         this.bot = bot
     }
 
-    private getEdgeExecutable(): string | undefined {
-        const paths = Browser.EDGE_PATHS[process.platform] ?? []
-        const found = paths.find(p => {
-            try { return fs.existsSync(p) } catch { return false }
-        })
-        if (!found) {
-            this.bot.logger.warn(this.bot.isMobile, 'BROWSER', 'Edge executable not found, falling back to Chromium')
-        } else {
-            this.bot.logger.info(this.bot.isMobile, 'BROWSER', `Using Edge at: ${found}`)
-        }
-        return found
-    }
-
     async createBrowser(account: Account): Promise<BrowserCreationResult> {
         let browser: rebrowser.Browser
-        const useEdge = (this.bot.config.browserType ?? 'chromium') === 'edge'
+        const browserType = this.bot.config.browserType ?? 'chromium'
 
         try {
             const proxyConfig = account.proxy.url
@@ -89,12 +58,13 @@ class Browser {
                   }
                 : undefined
 
-            const edgePath = useEdge ? this.getEdgeExecutable() : undefined
+            this.bot.logger.info(this.bot.isMobile, 'BROWSER', `Launching with browser engine: ${browserType.toUpperCase()}`)
 
             browser = await rebrowser.chromium.launch({
                 headless: this.bot.config.headless,
                 ...(proxyConfig && { proxy: proxyConfig }),
-                ...(edgePath && { executablePath: edgePath }),
+                // Dùng 'msedge' channel để Playwright tự tìm Edge đã cài trên hệ thống
+                ...(browserType === 'edge' && { channel: 'msedge' }),
                 args: [...Browser.BROWSER_ARGS]
             })
         } catch (error) {
